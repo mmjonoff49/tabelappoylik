@@ -1,0 +1,1404 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ish Vaqti va Maosh Hisoblagichi (Online Sync)</title>
+<!-- SheetJS for Multi-sheet Excel -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- Chart.js for Visualizations -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #111; color: #f0ede8; min-height: 100vh; }
+
+/* ── HEADER & CLOCK ── */
+header {
+  background: #161616; border-bottom: 1.5px solid #f97316;
+  padding: 0.75rem 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+}
+.header-brand { display: flex; align-items: center; gap: 10px; }
+.header-brand h1 { font-size: 18px; color: #f97316; font-weight: 700; letter-spacing: -0.5px; }
+
+.live-clock-container { text-align: right; }
+.live-time { font-size: 20px; font-weight: 700; color: #f97316; font-variant-numeric: tabular-nums; }
+.live-date { font-size: 11px; color: #a0a09a; }
+
+/* ── ONLINE BADGE ── */
+.online-status-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(74, 222, 128, 0.12); border: 1px solid rgba(74, 222, 128, 0.3);
+  color: #4ade80; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600;
+}
+.online-dot { width: 8px; height: 8px; background: #4ade80; border-radius: 50%; display: inline-block; box-shadow: 0 0 8px #4ade80; animation: pulse 2s infinite; }
+
+@keyframes pulse {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* ── PROFILE SELECTOR ── */
+.profile-bar {
+  background: #1a1a1a; padding: 0.6rem 1.5rem; border-bottom: 1px solid #282828;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+}
+.profile-label { font-size: 13px; color: #a0a09a; font-weight: 500; }
+.profile-select {
+  height: 34px; border: 1px solid #333; border-radius: 6px; padding: 0 10px;
+  font-size: 13px; background: #252525; color: #f0ede8; outline: none; cursor: pointer;
+}
+.profile-select:focus { border-color: #f97316; }
+
+/* ── TABS ── */
+.tab-bar { display: flex; border-bottom: 1px solid #282828; background: #141414; overflow-x: auto; }
+.tab-btn {
+  padding: 12px 20px; font-size: 13px; font-weight: 500; cursor: pointer;
+  border: none; background: none; color: #a0a09a; white-space: nowrap;
+  border-bottom: 3px solid transparent; transition: all .15s;
+  display: flex; align-items: center; gap: 7px;
+}
+.tab-btn:hover { color: #f0ede8; background: rgba(255,255,255,0.02); }
+.tab-btn.active { color: #f97316; border-bottom-color: #f97316; background: #1c1c1c; }
+
+.tab-page { display: none; padding: 1.5rem 1rem; }
+.tab-page.active { display: block; }
+.container { max-width: 1040px; margin: 0 auto; }
+
+/* ── COMMON CARDS & BUTTONS ── */
+.card { background: #1c1c1c; border: 1.5px solid #2a2a2a; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
+.card-title { font-size: 13px; font-weight: 600; color: #a0a09a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; }
+
+/* ── STATS BAR ── */
+.summary-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+.stat { background: #1c1c1c; border: 1px solid #2a2a2a; border-radius: 12px; padding: 1rem; display: flex; flex-direction: column; justify-content: space-between; }
+.stat.orange { border-left: 4px solid #f97316; }
+.stat.green { border-left: 4px solid #4ade80; }
+.stat.blue { border-left: 4px solid #38bdf8; }
+.stat.purple { border-left: 4px solid #c084fc; }
+.stat-label { font-size: 12px; color: #a0a09a; font-weight: 500; }
+.stat-val { font-size: 22px; font-weight: 700; color: #f0ede8; margin: 4px 0; }
+.stat-sub { font-size: 11px; color: #777; }
+
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field label { font-size: 12px; color: #a0a09a; }
+.field input, .field select {
+  height: 38px; border: 1px solid #333; border-radius: 8px; padding: 0 10px;
+  font-size: 14px; background: #252525; color: #f0ede8; outline: none; width: 100%;
+}
+.field input:focus, .field select:focus { border-color: #f97316; box-shadow: 0 0 0 3px rgba(249,115,22,.15); }
+.error-msg { color: #f87171; font-size: 13px; margin-top: .6rem; min-height: 18px; }
+
+.btn-primary {
+  height: 38px; padding: 0 18px; border-radius: 8px; border: none;
+  background: #f97316; color: #fff; font-size: 14px; font-weight: 500;
+  cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  transition: background .15s;
+}
+.btn-primary:hover { background: #ea6c0a; }
+.btn-ghost {
+  height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid #444;
+  background: #252525; color: #a0a09a; font-size: 13px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 5px; transition: all .15s;
+}
+.btn-ghost:hover { background: #333; color: #f0ede8; }
+.btn-excel {
+  height: 34px; padding: 0 14px; border-radius: 8px; border: none;
+  background: #14532d; color: #4ade80; font-size: 13px; font-weight: 500;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+}
+.btn-excel:hover { background: #166534; }
+.btn-pdf {
+  height: 34px; padding: 0 14px; border-radius: 8px; border: none;
+  background: #7f1d1d; color: #fca5a5; font-size: 13px; font-weight: 500;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+}
+.btn-pdf:hover { background: #991b1b; }
+
+.charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+@media(max-width: 768px){ .charts-grid { grid-template-columns: 1fr; } }
+.chart-container { position: relative; height: 240px; width: 100%; }
+
+/* ── FILTER BAR ── */
+.filter-bar {
+  background: #1c1c1c; border: 1px solid #2a2a2a; border-radius: 12px;
+  padding: 1rem; margin-bottom: 1rem;
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: space-between;
+}
+.filter-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.filter-bar label { font-size: 12px; color: #a0a09a; white-space: nowrap; }
+.filter-bar input[type="date"], .filter-bar select {
+  height: 34px; border: 1px solid #333; border-radius: 8px; padding: 0 8px;
+  font-size: 13px; background: #252525; color: #f0ede8; outline: none;
+}
+
+/* ── TABLE ── */
+.table-wrap { background: #1c1c1c; border: 1px solid #2a2a2a; border-radius: 12px; overflow-x: auto; margin-bottom: 1rem; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; padding: 10px 12px; font-size: 11px; color: #a0a09a; font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #2a2a2a; background: #161616; white-space: nowrap; }
+tr.data-row td { padding: 10px 12px; border-bottom: 1px solid #242424; color: #f0ede8; vertical-align: middle; }
+tr.data-row:last-child td { border-bottom: none; }
+tr.data-row:hover td { background: #222; }
+
+/* ── STATUS BADGES ── */
+.badge { 
+  display: inline-flex; 
+  align-items: center; 
+  gap: 5px; 
+  padding: 4px 10px; 
+  border-radius: 20px; 
+  font-size: 11px; 
+  font-weight: 600; 
+  letter-spacing: 0.3px;
+  border: 1px solid transparent;
+}
+.badge-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+.badge-ortiqcha { background: rgba(192,132,252,0.15); color: #c084fc; border-color: rgba(192,132,252,0.3); }
+.badge-ortiqcha .badge-dot { background: #c084fc; }
+.badge-norma { background: rgba(74,222,128,0.15); color: #4ade80; border-color: rgba(74,222,128,0.3); }
+.badge-norma .badge-dot { background: #4ade80; }
+.badge-qisqa { background: rgba(251,146,60,0.15); color: #fb923c; border-color: rgba(251,146,60,0.3); }
+.badge-qisqa .badge-dot { background: #fb923c; }
+.badge-kam { background: rgba(248,113,113,0.15); color: #f87171; border-color: rgba(248,113,113,0.3); }
+.badge-kam .badge-dot { background: #f87171; }
+
+.actions-cell { display: flex; gap: 4px; }
+.btn-icon { background: none; border: none; cursor: pointer; color: #888; padding: 5px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; transition: all .15s; }
+.btn-icon.edit:hover { color: #f97316; background: rgba(249,115,22,.15); }
+.btn-icon.del:hover  { color: #f87171; background: rgba(248,113,113,.15); }
+.empty { text-align: center; padding: 2.5rem; color: #555; font-size: 14px; }
+
+/* ── OYLIK PAGE ── */
+.oylik-top { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+@media(max-width:600px){ .oylik-top{grid-template-columns:1fr;} }
+
+.oylik-result { background: #1c1c1c; border: 1.5px solid #f97316; border-radius: 14px; overflow: hidden; margin-bottom: 1rem; }
+.oylik-result-header { background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); padding: 1.25rem 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+.oylik-result-header .month-name { font-size: 15px; font-weight: 600; color: rgba(255,255,255,.9); }
+.oylik-result-header .maosh-big { font-size: 30px; font-weight: 800; color: #fff; }
+.oylik-result-header .maosh-label { font-size: 12px; color: rgba(255,255,255,.75); margin-top: 2px; }
+.oylik-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0; }
+.oylik-cell { padding: 1rem; border-right: 1px solid #2a2a2a; border-bottom: 1px solid #2a2a2a; }
+.oylik-cell-label { font-size: 11px; color: #a0a09a; margin-bottom: 4px; }
+.oylik-cell-val { font-size: 16px; font-weight: 600; color: #f0ede8; }
+
+/* ── MODALS ── */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.75); z-index: 100; align-items: center; justify-content: center; backdrop-filter: blur(3px); }
+.modal-overlay.open { display: flex; }
+.modal { background: #1c1c1c; border: 1.5px solid #f97316; border-radius: 14px; padding: 1.5rem; width: 400px; max-width: 92vw; }
+.modal h3 { font-size: 16px; font-weight: 600; margin-bottom: 1.25rem; color: #f97316; }
+.modal .field { margin-bottom: .9rem; }
+.modal-btns { display: flex; gap: 8px; margin-top: 1.25rem; }
+.modal-btns button { flex: 1; height: 38px; border-radius: 8px; font-size: 14px; cursor: pointer; }
+
+.add-row { display: grid; grid-template-columns: 1.4fr 1fr 1fr auto; gap: 10px; align-items: end; }
+@media(max-width:600px){ .add-row{grid-template-columns:1fr 1fr;} .add-row .btn-primary{grid-column:span 2;} }
+
+/* ── PRINT / PDF STYLES ── */
+@media print {
+  body { background: #fff !important; color: #000 !important; font-size: 12px; }
+  header, .tab-bar, .profile-bar, .filter-bar, .actions-cell, .btn-primary, .btn-ghost, .btn-excel, .btn-pdf, .card-form, .modal-overlay { display: none !important; }
+  .tab-page { display: block !important; padding: 0 !important; }
+  .container { max-width: 100% !important; margin: 0 !important; }
+  .card, .table-wrap, .stat { border: 1px solid #ccc !important; background: #fff !important; color: #000 !important; box-shadow: none !important; }
+  .stat-val, .oylik-cell-val, td, th { color: #000 !important; }
+  .oylik-result-header { background: #eee !important; color: #000 !important; }
+  .oylik-result-header .maosh-big, .oylik-result-header .month-name, .oylik-result-header .maosh-label { color: #000 !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER WITH LIVE CLOCK & ONLINE INDICATOR -->
+<header>
+  <div class="header-brand">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    <h1>Ish Vaqti Pro</h1>
+    <span class="online-status-badge">
+      <span class="online-dot"></span> Online Realtime Sync
+    </span>
+  </div>
+  <div class="live-clock-container">
+    <div class="live-time" id="live-clock">00:00:00</div>
+    <div class="live-date" id="live-date">Dushanba, 1-Yanvar, 2026</div>
+  </div>
+</header>
+
+<!-- MULTI-PROFILE BAR -->
+<div class="profile-bar">
+  <span class="profile-label">👤 Xodim profili:</span>
+  <select class="profile-select" id="profile-select" onchange="switchProfile(this.value)"></select>
+  <button class="btn-ghost" onclick="openNewProfileModal()">+ Yangi xodim</button>
+  <button class="btn-ghost" onclick="deleteCurrentProfile()" style="color:#f87171;">O'chirish</button>
+  <span style="margin-left:auto; font-size:12px; color:#4ade80; display:flex; align-items:center; gap:5px;">
+    ☁️ Ma'lumotlar avtomatik ravishda online saqlanadi
+  </span>
+</div>
+
+<!-- TABS -->
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('jadval')">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+    Ish vaqti
+  </button>
+  <button class="tab-btn" onclick="switchTab('analitika')">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+    Grafik va Tahlil
+  </button>
+  <button class="tab-btn" onclick="switchTab('oylik')">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+    Oylik Hisob
+  </button>
+  <button class="tab-btn" onclick="switchTab('sozlama')">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    Sozlamalar
+  </button>
+</div>
+
+<!-- ══════════ TAB 1: ISH VAQTI ══════════ -->
+<div class="tab-page active" id="tab-jadval">
+<div class="container">
+
+  <div class="card card-form">
+    <div class="card-title">Yangi ish vaqti kiritish</div>
+    <div class="add-row">
+      <div class="field"><label>Sana</label><input type="date" id="inp-date"></div>
+      <div class="field"><label>Kirish vaqti</label><input type="time" id="inp-in"></div>
+      <div class="field"><label>Chiqish vaqti</label><input type="time" id="inp-out"></div>
+      <button class="btn-primary" onclick="addRow()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Saqlash
+      </button>
+    </div>
+    <div class="error-msg" id="err-msg"></div>
+  </div>
+
+  <div class="summary-bar">
+    <div class="stat orange">
+      <div class="stat-label">Jami kunlar</div>
+      <div class="stat-val" id="total-days">0</div>
+      <div class="stat-sub" id="stat-days-sub">Ro'yxatdan o'tgan</div>
+    </div>
+    <div class="stat green">
+      <div class="stat-label">Jami ish soati</div>
+      <div class="stat-val" id="total-hours">0:00</div>
+      <div class="stat-sub">Umumiy yig'indi</div>
+    </div>
+    <div class="stat blue">
+      <div class="stat-label">O'rtacha kunlik</div>
+      <div class="stat-val" id="avg-hours">0:00</div>
+      <div class="stat-sub">Bir kunlik davomiylik</div>
+    </div>
+    <div class="stat purple">
+      <div class="stat-label">Norma bajarildi</div>
+      <div class="stat-val" id="norma-count">0 kun</div>
+      <div class="stat-sub">Norma va Ortiqcha</div>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <div class="filter-group">
+      <label>Dan:</label><input type="date" id="f-from" onchange="render()">
+      <label>Gacha:</label><input type="date" id="f-to" onchange="render()">
+      <label>Holat:</label>
+      <select id="f-status" onchange="render()">
+        <option value="">Hammasi</option>
+        <option value="ortiqcha">Ortiqcha</option>
+        <option value="norma">Norma</option>
+        <option value="qisqa">Qisqa</option>
+        <option value="kam">Kam</option>
+      </select>
+      <button class="btn-ghost" onclick="clearFilters()">Tozalash</button>
+    </div>
+
+    <div class="filter-group">
+      <button class="btn-pdf" onclick="window.print()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        PDF / Chop etish
+      </button>
+      <button class="btn-excel" onclick="exportMultiSheetExcel()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Multi-Sheet Excel (.xlsx)
+      </button>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>№</th><th>Sana</th><th>Hafta kuni</th><th>Kirish</th><th>Chiqish</th><th>Ish soati</th><th>Farq</th><th>Holat</th><th class="actions-cell">Amallar</th></tr>
+      </thead>
+      <tbody id="rows-body">
+        <tr><td colspan="9" class="empty">Yozuvlar mavjud emas.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</div>
+
+<!-- ══════════ TAB 2: GRAFIK VA TAHLIL ══════════ -->
+<div class="tab-page" id="tab-analitika">
+<div class="container">
+
+  <div class="summary-bar">
+    <div class="stat green">
+      <div class="stat-label" style="display:flex;align-items:center;gap:5px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        Eng ko'p ishlangan kun
+      </div>
+      <div class="stat-val" id="top-day-val">—</div>
+      <div class="stat-sub" id="top-day-date">Sana ko'rsatilmadi</div>
+    </div>
+    <div class="stat orange">
+      <div class="stat-label" style="display:flex;align-items:center;gap:5px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2.5"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>
+        Eng kam ishlangan kun
+      </div>
+      <div class="stat-val" id="low-day-val">—</div>
+      <div class="stat-sub" id="low-day-date">Sana ko'rsatilmadi</div>
+    </div>
+  </div>
+
+  <div class="charts-grid">
+    <div class="card">
+      <div class="card-title">📊 Haftalik Ish Soatlari</div>
+      <div class="chart-container">
+        <canvas id="weeklyChart"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">📅 Oylar Taqqoslash Grafigi</div>
+      <div class="chart-container">
+        <canvas id="monthlyChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ══════════ TAB 3: OYLIK HISOB ══════════ -->
+<div class="tab-page" id="tab-oylik">
+<div class="container">
+
+  <div class="oylik-top">
+    <div class="card">
+      <div class="card-title">Oy Tanlash</div>
+      <div style="display:flex; gap:10px; align-items:flex-end;">
+        <div class="field" style="flex:1;"><label>Yil</label><select id="oy-yil" onchange="renderOylik()"></select></div>
+        <div class="field" style="flex:1;">
+          <label>Oy</label>
+          <select id="oy-oy" onchange="renderOylik()">
+            <option value="0">Yanvar</option><option value="1">Fevral</option>
+            <option value="2">Mart</option><option value="3">Aprel</option>
+            <option value="4">May</option><option value="5">Iyun</option>
+            <option value="6">Iyul</option><option value="7">Avgust</option>
+            <option value="8">Sentabr</option><option value="9">Oktabr</option>
+            <option value="10">Noyabr</option><option value="11">Dekabr</option>
+          </select>
+        </div>
+        <button class="btn-primary" onclick="setCurrentMonth()">Joriy oy</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Oylik Maosh Sozlamasi</div>
+      <div style="display:flex; gap:10px;">
+        <div class="field" style="flex:2;"><label>Oylik maosh (so'm)</label><input type="number" id="oylik-maosh" placeholder="4400000" min="0" oninput="saveMaosh(); renderOylik()"></div>
+        <div class="field" style="flex:1;"><label>Ish kunlari</label><input type="number" id="oylik-kun" placeholder="30" min="1" max="31" oninput="saveMaosh(); renderOylik()"></div>
+      </div>
+      <div style="margin-top:8px;font-size:12px;color:#777;" id="formula-preview">—</div>
+    </div>
+  </div>
+
+  <div class="oylik-result" id="oylik-result-card" style="display:none;">
+    <div class="oylik-result-header">
+      <div>
+        <div class="month-name" id="res-month-name">—</div>
+        <div class="maosh-label">Hisoblangan oylik maosh</div>
+      </div>
+      <div style="text-align:right;">
+        <div class="maosh-big" id="res-maosh">— so'm</div>
+        <div class="maosh-label" id="res-soat-label">—</div>
+      </div>
+    </div>
+    <div class="oylik-grid">
+      <div class="oylik-cell"><div class="oylik-cell-label">Ishlangan kunlar</div><div class="oylik-cell-val" id="res-kunlar">0</div></div>
+      <div class="oylik-cell"><div class="oylik-cell-label">Jami soat:daqiqa</div><div class="oylik-cell-val" style="color:#f97316;" id="res-jami">0:00</div></div>
+      <div class="oylik-cell"><div class="oylik-cell-label">Soatlik stavka</div><div class="oylik-cell-val" id="res-stavka">—</div></div>
+      <div class="oylik-cell"><div class="oylik-cell-label">Normadan farq</div><div class="oylik-cell-val" id="res-farq">—</div></div>
+    </div>
+  </div>
+
+  <div class="table-wrap" id="oylik-table-wrap" style="display:none;">
+    <table>
+      <thead>
+        <tr><th>№</th><th>Sana</th><th>Kun</th><th>Kirish</th><th>Chiqish</th><th>Ish soati</th><th>Hisoblangan maosh</th><th>Holat</th></tr>
+      </thead>
+      <tbody id="oylik-tbody"></tbody>
+    </table>
+  </div>
+
+  <div id="oylik-empty" class="card" style="text-align:center;padding:2.5rem;color:#555;display:none;">
+    Bu oy uchun ish vaqti yozuvlari topilmadi.
+  </div>
+
+</div>
+</div>
+
+<!-- ══════════ TAB 4: SOZLAMALAR ══════════ -->
+<div class="tab-page" id="tab-sozlama">
+<div class="container">
+
+  <div class="card">
+    <div class="card-title">Holat chegaralari (Vaqtlar)</div>
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:10px;">
+      <div class="field"><label>Ortiqcha (dan boshlab)</label><input type="time" id="s-ortiqcha-from"></div>
+      <div class="field"><label>Norma (boshi)</label><input type="time" id="s-norma-from"></div>
+      <div class="field"><label>Norma (oxiri)</label><input type="time" id="s-norma-to"></div>
+      <div class="field"><label>Qisqa (boshi)</label><input type="time" id="s-qisqa-from"></div>
+      <div class="field"><label>Qisqa (oxiri)</label><input type="time" id="s-qisqa-to"></div>
+      <div class="field"><label>Kam (gacha)</label><input type="time" id="s-kam-to"></div>
+    </div>
+    <div style="margin-top:12px; display:flex; gap:10px; align-items:center;">
+      <button class="btn-primary" onclick="saveSettings()">Saqlash</button>
+      <span id="settings-msg" style="color:#4ade80; font-size:13px; display:none;">✓ Saqlandi</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Ma'lumotlarni Zaxiralash & Qaytarish</div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <button class="btn-ghost" onclick="exportBackup()">📥 Zaxira yuklab olish (JSON)</button>
+      <label class="btn-ghost" style="cursor:pointer;">
+        📤 Zaxiradan tiklash
+        <input type="file" accept=".json" onchange="importBackup(event)" style="display:none;">
+      </label>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- EDIT MODAL -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <h3>Yozuvni tahrirlash</h3>
+    <div class="field"><label>Sana</label><input type="date" id="edit-date"></div>
+    <div class="field"><label>Kirish vaqti</label><input type="time" id="edit-in"></div>
+    <div class="field"><label>Chiqish vaqti</label><input type="time" id="edit-out"></div>
+    <div class="error-msg" id="modal-err"></div>
+    <div class="modal-btns">
+      <button class="btn-ghost" onclick="closeModal()">Bekor qilish</button>
+      <button class="btn-primary" onclick="saveEdit()">Saqlash</button>
+    </div>
+  </div>
+</div>
+
+<!-- NEW PROFILE MODAL -->
+<div class="modal-overlay" id="profile-modal-overlay">
+  <div class="modal">
+    <h3>Yangi xodim profili</h3>
+    <div class="field"><label>Xodim ismi / ID</label><input type="text" id="new-profile-name" placeholder="Masalan: Ali Valiyev"></div>
+    <div class="error-msg" id="profile-modal-err"></div>
+    <div class="modal-btns">
+      <button class="btn-ghost" onclick="closeProfileModal()">Bekor qilish</button>
+      <button class="btn-primary" onclick="createNewProfile()">Yaratish</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+const MONTH_NAMES = ["Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun", "Iyul", "Avgust", "Sentabr", "Oktabr", "Noyabr", "Dekabr"];
+const WEEK_DAYS = ["Yakshanba", "Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba"];
+
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'ish-vaqti-pro-app';
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+let app, auth, db;
+let currentUser = null;
+
+let profiles = [{ id: 'default', name: 'Asosiy Xodim' }];
+let currentProfileId = "default";
+let records = [];
+let editingRecordId = null;
+
+let cfg = {
+  ortiqchaFrom: "09:00",
+  normaFrom: "08:00",
+  normaTo: "08:59",
+  qisqaFrom: "06:00",
+  qisqaTo: "07:59",
+  kamTo: "05:59"
+};
+
+let maoshCfg = {
+  oylikMaosh: 4400000,
+  ishKunlari: 26
+};
+
+let weeklyChartInst = null;
+let monthlyChartInst = null;
+
+// Helpers
+function pad(num) { return String(num).padStart(2, '0'); }
+function parseTimeToMinutes(tStr) {
+  if (!tStr) return 0;
+  const parts = tStr.split(':');
+  return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+}
+function formatMinutes(totalMins) {
+  if (isNaN(totalMins) || totalMins < 0) return "0:00";
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  return `${h}:${pad(m)}`;
+}
+function formatCurrency(val) { return Math.round(val).toLocaleString('uz-UZ'); }
+
+async function initFirebaseSync() {
+  if (!firebaseConfig) {
+    console.log("Offline / local state fallback");
+    loadFromLocalStorage();
+    return;
+  }
+  
+  try {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+
+    if (initialAuthToken) {
+      await signInWithCustomToken(auth, initialAuthToken);
+    } else {
+      await signInAnonymously(auth);
+    }
+
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        currentUser = user;
+        setupRealtimeListener(user.uid);
+      }
+    });
+  } catch(err) {
+    console.warn("Firebase Auth error:", err);
+    loadFromLocalStorage();
+  }
+}
+
+function setupRealtimeListener(userId) {
+  if (!db || !userId) return;
+  // Strict rule 1 path: /artifacts/{appId}/users/{userId}/data/work_state
+  const docRef = doc(db, 'artifacts', appId, 'users', userId, 'data', 'work_state');
+
+  onSnapshot(docRef, (docSnap) => {
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      if (data.profiles && Array.isArray(data.profiles)) profiles = data.profiles;
+      if (data.currentProfileId) currentProfileId = data.currentProfileId;
+      if (data.records && Array.isArray(data.records)) records = data.records;
+      if (data.cfg) cfg = Object.assign(cfg, data.cfg);
+      if (data.maoshCfg) maoshCfg = Object.assign(maoshCfg, data.maoshCfg);
+      
+      saveToLocalStorage();
+      renderProfileSelect();
+      loadCfgToInput();
+      loadMaoshToInput();
+      render();
+      renderOylik();
+      renderCharts();
+    } else {
+      // First time init: seed initial data
+      syncToCloud();
+    }
+  }, (err) => {
+    console.warn("Realtime listener warning (Offline fallback):", err);
+    loadFromLocalStorage();
+  });
+}
+
+async function syncToCloud() {
+  saveToLocalStorage();
+  if (!db || !currentUser) return;
+  try {
+    const docRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'data', 'work_state');
+    await setDoc(docRef, {
+      profiles,
+      currentProfileId,
+      records,
+      cfg,
+      maoshCfg,
+      updatedAt: new Date().toISOString()
+    });
+  } catch (err) {
+    console.warn("Cloud sync error:", err);
+  }
+}
+
+function loadFromLocalStorage() {
+  const p = localStorage.getItem('ish_profiles');
+  if (p) { try { profiles = JSON.parse(p); } catch(e){} }
+  const cP = localStorage.getItem('ish_current_profile');
+  if (cP) currentProfileId = cP;
+  
+  const r = localStorage.getItem('ish_records');
+  if (r) { try { records = JSON.parse(r); } catch(e){} }
+  
+  const c = localStorage.getItem('ish_cfg');
+  if (c) { try { cfg = Object.assign(cfg, JSON.parse(c)); } catch(e){} }
+  
+  const m = localStorage.getItem('ish_maosh');
+  if (m) { try { maoshCfg = Object.assign(maoshCfg, JSON.parse(m)); } catch(e){} }
+
+  renderProfileSelect();
+  loadCfgToInput();
+  loadMaoshToInput();
+  render();
+  renderOylik();
+  renderCharts();
+}
+
+function saveToLocalStorage() {
+  localStorage.setItem('ish_profiles', JSON.stringify(profiles));
+  localStorage.setItem('ish_current_profile', currentProfileId);
+  localStorage.setItem('ish_records', JSON.stringify(records));
+  localStorage.setItem('ish_cfg', JSON.stringify(cfg));
+  localStorage.setItem('ish_maosh', JSON.stringify(maoshCfg));
+}
+
+function updateOnlineStatus() {
+  const badge = document.querySelector('.online-status-badge');
+  if (!badge) return;
+  if (navigator.onLine) {
+    badge.style.background = 'rgba(74, 222, 128, 0.12)';
+    badge.style.borderColor = 'rgba(74, 222, 128, 0.3)';
+    badge.style.color = '#4ade80';
+    badge.innerHTML = `<span class="online-dot"></span> Online Realtime Sync`;
+  } else {
+    badge.style.background = 'rgba(251, 146, 60, 0.12)';
+    badge.style.borderColor = 'rgba(251, 146, 60, 0.3)';
+    badge.style.color = '#fb923c';
+    badge.innerHTML = `<span class="online-dot" style="background:#fb923c;box-shadow:0 0 8px #fb923c;"></span> Offline Rejim`;
+  }
+}
+window.addEventListener('online', updateOnlineStatus);
+window.addEventListener('offline', updateOnlineStatus);
+
+// Clock
+function updateLiveClock() {
+  const now = new Date();
+  const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  const dayName = WEEK_DAYS[now.getDay()];
+  const dateStr = `${dayName}, ${now.getDate()}-${MONTH_NAMES[now.getMonth()]}, ${now.getFullYear()}`;
+  
+  const clockEl = document.getElementById('live-clock');
+  const dateEl = document.getElementById('live-date');
+  if (clockEl) clockEl.textContent = timeStr;
+  if (dateEl) dateEl.textContent = dateStr;
+}
+setInterval(updateLiveClock, 1000);
+updateLiveClock();
+
+// Profiles
+function renderProfileSelect() {
+  const sel = document.getElementById('profile-select');
+  if (!sel) return;
+  sel.innerHTML = profiles.map(p => `<option value="${p.id}" ${p.id === currentProfileId ? 'selected' : ''}>${p.name}</option>`).join('');
+}
+
+window.switchProfile = function(newId) {
+  currentProfileId = newId;
+  syncToCloud();
+  render();
+  renderOylik();
+  renderCharts();
+};
+
+window.openNewProfileModal = function() {
+  document.getElementById('new-profile-name').value = '';
+  document.getElementById('profile-modal-err').textContent = '';
+  document.getElementById('profile-modal-overlay').classList.add('open');
+};
+
+window.closeProfileModal = function() {
+  document.getElementById('profile-modal-overlay').classList.remove('open');
+};
+
+window.createNewProfile = function() {
+  const name = document.getElementById('new-profile-name').value.trim();
+  const errEl = document.getElementById('profile-modal-err');
+  if (!name) {
+    errEl.textContent = "Iltimos, xodim ismini kiriting!";
+    return;
+  }
+  const newId = 'prof_' + Date.now();
+  profiles.push({ id: newId, name: name });
+  currentProfileId = newId;
+  
+  closeProfileModal();
+  syncToCloud();
+};
+
+window.deleteCurrentProfile = function() {
+  if (profiles.length <= 1) {
+    const msg = document.getElementById('err-msg');
+    if (msg) msg.textContent = "Yagona xodim profilini o'chirib bo'lmaydi!";
+    return;
+  }
+  records = records.filter(r => r.profileId !== currentProfileId);
+  profiles = profiles.filter(p => p.id !== currentProfileId);
+  currentProfileId = profiles[0].id;
+  syncToCloud();
+};
+
+// Cfg & Settings
+function loadCfgToInput() {
+  document.getElementById('s-ortiqcha-from').value = cfg.ortiqchaFrom || '09:00';
+  document.getElementById('s-norma-from').value = cfg.normaFrom || '08:00';
+  document.getElementById('s-norma-to').value = cfg.normaTo || '08:59';
+  document.getElementById('s-qisqa-from').value = cfg.qisqaFrom || '06:00';
+  document.getElementById('s-qisqa-to').value = cfg.qisqaTo || '07:59';
+  document.getElementById('s-kam-to').value = cfg.kamTo || '05:59';
+}
+
+window.saveSettings = function() {
+  cfg.ortiqchaFrom = document.getElementById('s-ortiqcha-from').value || '09:00';
+  cfg.normaFrom = document.getElementById('s-norma-from').value || '08:00';
+  cfg.normaTo = document.getElementById('s-norma-to').value || '08:59';
+  cfg.qisqaFrom = document.getElementById('s-qisqa-from').value || '06:00';
+  cfg.qisqaTo = document.getElementById('s-qisqa-to').value || '07:59';
+  cfg.kamTo = document.getElementById('s-kam-to').value || '05:59';
+  
+  syncToCloud();
+  const msg = document.getElementById('settings-msg');
+  if (msg) {
+    msg.style.display = 'inline';
+    setTimeout(() => { msg.style.display = 'none'; }, 2000);
+  }
+};
+
+function loadMaoshToInput() {
+  document.getElementById('oylik-maosh').value = maoshCfg.oylikMaosh || 4400000;
+  document.getElementById('oylik-kun').value = maoshCfg.ishKunlari || 26;
+}
+
+window.saveMaosh = function() {
+  maoshCfg.oylikMaosh = parseFloat(document.getElementById('oylik-maosh').value) || 0;
+  maoshCfg.ishKunlari = parseInt(document.getElementById('oylik-kun').value, 10) || 26;
+  syncToCloud();
+};
+
+function getStatus(mins) {
+  const ortMins = parseTimeToMinutes(cfg.ortiqchaFrom || '09:00');
+  const normaFromMins = parseTimeToMinutes(cfg.normaFrom || '08:00');
+  const qisqaFromMins = parseTimeToMinutes(cfg.qisqaFrom || '06:00');
+
+  if (mins >= ortMins) return 'ortiqcha';
+  if (mins >= normaFromMins) return 'norma';
+  if (mins >= qisqaFromMins) return 'qisqa';
+  return 'kam';
+}
+
+function getBadgeHTML(status) {
+  if (status === 'ortiqcha') return `<span class="badge badge-ortiqcha"><span class="badge-dot"></span> Ortiqcha</span>`;
+  if (status === 'norma') return `<span class="badge badge-norma"><span class="badge-dot"></span> Norma</span>`;
+  if (status === 'qisqa') return `<span class="badge badge-qisqa"><span class="badge-dot"></span> Qisqa</span>`;
+  return `<span class="badge badge-kam"><span class="badge-dot"></span> Kam</span>`;
+}
+
+window.addRow = function() {
+  const dateVal = document.getElementById('inp-date').value;
+  const timeIn = document.getElementById('inp-in').value;
+  const timeOut = document.getElementById('inp-out').value;
+  const errEl = document.getElementById('err-msg');
+
+  if (!dateVal || !timeIn || !timeOut) {
+    errEl.textContent = "Barcha maydonlarni to'ldiring!";
+    return;
+  }
+
+  const startMins = parseTimeToMinutes(timeIn);
+  let endMins = parseTimeToMinutes(timeOut);
+  if (endMins < startMins) endMins += 24 * 60;
+  const durMins = endMins - startMins;
+
+  if (durMins <= 0) {
+    errEl.textContent = "Chiqish vaqti kirish vaqtidan keyin bo'lishi kerak!";
+    return;
+  }
+
+  errEl.textContent = "";
+  const status = getStatus(durMins);
+
+  const newRec = {
+    id: 'rec_' + Date.now(),
+    profileId: currentProfileId,
+    date: dateVal,
+    timeIn: timeIn,
+    timeOut: timeOut,
+    durMins: durMins,
+    status: status
+  };
+
+  records.unshift(newRec);
+  syncToCloud();
+};
+
+window.deleteRow = function(id) {
+  records = records.filter(r => r.id !== id);
+  syncToCloud();
+};
+window.createNewProfile = function() {
+  const name = document.getElementById('new-profile-name').value.trim();
+  const errEl = document.getElementById('profile-modal-err');
+  if (!name) {
+    errEl.textContent = "Iltimos, xodim ismini kiriting!";
+    return;
+  }
+  const newId = 'prof_' + Date.now();
+  profiles.push({ id: newId, name: name });
+  currentProfileId = newId;
+  
+  closeProfileModal();
+  syncToCloud();
+};
+
+window.deleteCurrentProfile = function() {
+  if (profiles.length <= 1) {
+    const msg = document.getElementById('err-msg');
+    if (msg) msg.textContent = "Yagona xodim profilini o'chirib bo'lmaydi!";
+    return;
+  }
+  records = records.filter(r => r.profileId !== currentProfileId);
+  profiles = profiles.filter(p => p.id !== currentProfileId);
+  currentProfileId = profiles[0].id;
+  syncToCloud();
+};
+window.addRow = function() {
+  const dateVal = document.getElementById('inp-date').value;
+  const timeIn = document.getElementById('inp-in').value;
+  const timeOut = document.getElementById('inp-out').value;
+  const errEl = document.getElementById('err-msg');
+
+  if (!dateVal || !timeIn || !timeOut) {
+    errEl.textContent = "Barcha maydonlarni to'ldiring!";
+    return;
+  }
+
+  const startMins = parseTimeToMinutes(timeIn);
+  let endMins = parseTimeToMinutes(timeOut);
+  if (endMins < startMins) endMins += 24 * 60;
+  const durMins = endMins - startMins;
+
+  if (durMins <= 0) {
+    errEl.textContent = "Chiqish vaqti kirish vaqtidan keyin bo'lishi kerak!";
+    return;
+  }
+
+  errEl.textContent = "";
+  const status = getStatus(durMins);
+
+  const newRec = {
+    id: 'rec_' + Date.now(),
+    profileId: currentProfileId,
+    date: dateVal,
+    timeIn: timeIn,
+    timeOut: timeOut,
+    durMins: durMins,
+    status: status
+  };
+
+  records.unshift(newRec);
+
+  // Clear time inputs for instant clear feedback
+  document.getElementById('inp-in').value = '';
+  document.getElementById('inp-out').value = '';
+
+  // Instant UI update
+  render();
+  renderOylik();
+  renderCharts();
+
+  // Sync to local and cloud in background
+  syncToCloud();
+};
+
+window.deleteRow = function(id) {
+  records = records.filter(r => r.id !== id);
+  render();
+  renderOylik();
+  renderCharts();
+  syncToCloud();
+};
+
+window.editRow = function(id) {
+  const rec = records.find(r => r.id === id);
+  if (!rec) return;
+  editingRecordId = id;
+  document.getElementById('edit-date').value = rec.date;
+  document.getElementById('edit-in').value = rec.timeIn;
+  document.getElementById('edit-out').value = rec.timeOut;
+  document.getElementById('modal-err').textContent = "";
+  document.getElementById('modal-overlay').classList.add('open');
+};
+
+window.closeModal = function() {
+  document.getElementById('modal-overlay').classList.remove('open');
+  editingRecordId = null;
+};
+
+window.saveEdit = function() {
+  if (!editingRecordId) return;
+  const dateVal = document.getElementById('edit-date').value;
+  const timeIn = document.getElementById('edit-in').value;
+  const timeOut = document.getElementById('edit-out').value;
+  const errEl = document.getElementById('modal-err');
+
+  if (!dateVal || !timeIn || !timeOut) {
+    errEl.textContent = "Barcha maydonlarni to'ldiring!";
+    return;
+  }
+
+  const startMins = parseTimeToMinutes(timeIn);
+  let endMins = parseTimeToMinutes(timeOut);
+  if (endMins < startMins) endMins += 24 * 60;
+  const durMins = endMins - startMins;
+
+  const rec = records.find(r => r.id === editingRecordId);
+  if (rec) {
+    rec.date = dateVal;
+    rec.timeIn = timeIn;
+    rec.timeOut = timeOut;
+    rec.durMins = durMins;
+    rec.status = getStatus(durMins);
+    closeModal();
+    render();
+    renderOylik();
+    renderCharts();
+    syncToCloud();
+  }
+};
+
+window.createNewProfile = function() {
+  const name = document.getElementById('new-profile-name').value.trim();
+  const errEl = document.getElementById('profile-modal-err');
+  if (!name) {
+    errEl.textContent = "Iltimos, xodim ismini kiriting!";
+    return;
+  }
+  const newId = 'prof_' + Date.now();
+  profiles.push({ id: newId, name: name });
+  currentProfileId = newId;
+  
+  closeProfileModal();
+  renderProfileSelect();
+  render();
+  renderOylik();
+  renderCharts();
+  syncToCloud();
+};
+
+window.deleteCurrentProfile = function() {
+  if (profiles.length <= 1) {
+    const msg = document.getElementById('err-msg');
+    if (msg) msg.textContent = "Yagona xodim profilini o'chirib bo'lmaydi!";
+    return;
+  }
+  records = records.filter(r => r.profileId !== currentProfileId);
+  profiles = profiles.filter(p => p.id !== currentProfileId);
+  currentProfileId = profiles[0].id;
+  renderProfileSelect();
+  render();
+  renderOylik();
+  renderCharts();
+  syncToCloud();
+};
+
+window.saveEdit = function() {
+  if (!editingRecordId) return;
+  const dateVal = document.getElementById('edit-date').value;
+  const timeIn = document.getElementById('edit-in').value;
+  const timeOut = document.getElementById('edit-out').value;
+  const errEl = document.getElementById('modal-err');
+
+  if (!dateVal || !timeIn || !timeOut) {
+    errEl.textContent = "Barcha maydonlarni to'ldiring!";
+    return;
+  }
+
+  const startMins = parseTimeToMinutes(timeIn);
+  let endMins = parseTimeToMinutes(timeOut);
+  if (endMins < startMins) endMins += 24 * 60;
+  const durMins = endMins - startMins;
+
+  const rec = records.find(r => r.id === editingRecordId);
+  if (rec) {
+    rec.date = dateVal;
+    rec.timeIn = timeIn;
+    rec.timeOut = timeOut;
+    rec.durMins = durMins;
+    rec.status = getStatus(durMins);
+    closeModal();
+    syncToCloud();
+  }
+};
+
+window.clearFilters = function() {
+  document.getElementById('f-from').value = '';
+  document.getElementById('f-to').value = '';
+  document.getElementById('f-status').value = '';
+  render();
+};
+
+function render() {
+  const tbody = document.getElementById('rows-body');
+  if (!tbody) return;
+
+  const fFrom = document.getElementById('f-from').value;
+  const fTo = document.getElementById('f-to').value;
+  const fStatus = document.getElementById('f-status').value;
+
+  let filtered = records.filter(r => r.profileId === currentProfileId);
+
+  if (fFrom) filtered = filtered.filter(r => r.date >= fFrom);
+  if (fTo) filtered = filtered.filter(r => r.date <= fTo);
+  if (fStatus) filtered = filtered.filter(r => r.status === fStatus);
+
+  filtered.sort((a,b) => b.date.localeCompare(a.date));
+
+  let totalMins = 0;
+  let normaCount = 0;
+
+  filtered.forEach(r => {
+    totalMins += r.durMins;
+    if (r.status === 'norma' || r.status === 'ortiqcha') normaCount++;
+  });
+
+  document.getElementById('total-days').textContent = filtered.length;
+  document.getElementById('total-hours').textContent = formatMinutes(totalMins);
+  document.getElementById('avg-hours').textContent = filtered.length > 0 ? formatMinutes(Math.round(totalMins / filtered.length)) : "0:00";
+  document.getElementById('norma-count').textContent = normaCount + " kun";
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" class="empty">Yozuvlar mavjud emas.</td></tr>`;
+    return;
+  }
+
+  const standardNormMins = 8 * 60;
+
+  tbody.innerHTML = filtered.map((r, idx) => {
+    const dObj = new Date(r.date);
+    const dayName = WEEK_DAYS[dObj.getDay()];
+    const diffMins = r.durMins - standardNormMins;
+    const diffStr = diffMins >= 0 ? `+${formatMinutes(diffMins)}` : `-${formatMinutes(Math.abs(diffMins))}`;
+    const diffColor = diffMins >= 0 ? '#4ade80' : '#f87171';
+
+    return `<tr class="data-row">
+      <td>${idx + 1}</td>
+      <td>${r.date}</td>
+      <td>${dayName}</td>
+      <td>${r.timeIn}</td>
+      <td>${r.timeOut}</td>
+      <td style="font-weight:600; color:#f97316;">${formatMinutes(r.durMins)}</td>
+      <td style="color:${diffColor}; font-weight:500;">${diffStr}</td>
+      <td>${getBadgeHTML(r.status)}</td>
+      <td class="actions-cell">
+        <button class="btn-icon edit" onclick="editRow('${r.id}')" title="Tahrirlash">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="btn-icon del" onclick="deleteRow('${r.id}')" title="O'chirish">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function renderCharts() {
+  const curRecords = records.filter(r => r.profileId === currentProfileId);
+  let topRec = null;
+  let lowRec = null;
+
+  curRecords.forEach(r => {
+    if (!topRec || r.durMins > topRec.durMins) topRec = r;
+    if (!lowRec || r.durMins < lowRec.durMins) lowRec = r;
+  });
+
+  const topValEl = document.getElementById('top-day-val');
+  const topDateEl = document.getElementById('top-day-date');
+  if (topRec) {
+    topValEl.textContent = formatMinutes(topRec.durMins);
+    topDateEl.textContent = topRec.date;
+  } else {
+    topValEl.textContent = '—';
+    topDateEl.textContent = 'Sana ko\'rsatilmadi';
+  }
+
+  const lowValEl = document.getElementById('low-day-val');
+  const lowDateEl = document.getElementById('low-day-date');
+  if (lowRec) {
+    lowValEl.textContent = formatMinutes(lowRec.durMins);
+    lowDateEl.textContent = lowRec.date;
+  } else {
+    lowValEl.textContent = '—';
+    lowDateEl.textContent = 'Sana ko\'rsatilmadi';
+  }
+
+  // Weekly Chart
+  const sorted = curRecords.slice().sort((a,b) => a.date.localeCompare(b.date));
+  const recent7 = sorted.slice(-7);
+  const wLabels = recent7.map(r => r.date);
+  const wData = recent7.map(r => (r.durMins / 60).toFixed(2));
+
+  const ctxW = document.getElementById('weeklyChart');
+  if (ctxW) {
+    if (weeklyChartInst) weeklyChartInst.destroy();
+    weeklyChartInst = new Chart(ctxW, {
+      type: 'bar',
+      data: {
+        labels: wLabels.length > 0 ? wLabels : ['Ma\'lumot yo\'q'],
+        datasets: [{
+          label: 'Ish soati',
+          data: wData.length > 0 ? wData : [0],
+          backgroundColor: '#f97316',
+          borderRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, grid: { color: '#2a2a2a' }, ticks: { color: '#a0a09a' } },
+          x: { grid: { display: false }, ticks: { color: '#a0a09a' } }
+        }
+      }
+    });
+  }
+
+  // Monthly Chart
+  const mSums = {};
+  curRecords.forEach(r => {
+    const key = r.date.substring(0, 7);
+    mSums[key] = (mSums[key] || 0) + (r.durMins / 60);
+  });
+
+  const mKeys = Object.keys(mSums).sort();
+  const mLabels = mKeys.map(k => {
+    const parts = k.split('-');
+    return `${MONTH_NAMES[parseInt(parts[1], 10) - 1]} ${parts[0]}`;
+  });
+  const mData = mKeys.map(k => mSums[k].toFixed(1));
+
+  const ctxM = document.getElementById('monthlyChart');
+  if (ctxM) {
+    if (monthlyChartInst) monthlyChartInst.destroy();
+    monthlyChartInst = new Chart(ctxM, {
+      type: 'line',
+      data: {
+        labels: mLabels.length > 0 ? mLabels : ['Ma\'lumot yo\'q'],
+        datasets: [{
+          label: 'Jami soat',
+          data: mData.length > 0 ? mData : [0],
+          borderColor: '#38bdf8',
+          backgroundColor: 'rgba(56,189,248,0.1)',
+          fill: true,
+          tension: 0.3
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, grid: { color: '#2a2a2a' }, ticks: { color: '#a0a09a' } },
+          x: { grid: { display: false }, ticks: { color: '#a0a09a' } }
+        }
+      }
+    });
+  }
+}
+
+function initYilSelect() {
+  const sel = document.getElementById('oy-yil');
+  if (!sel) return;
+  const currentY = new Date().getFullYear();
+  sel.innerHTML = '';
+  for (let y = currentY - 2; y <= currentY + 2; y++) {
+    sel.innerHTML += `<option value="${y}" ${y === currentY ? 'selected' : ''}>${y}</option>`;
+  }
+  document.getElementById('oy-oy').value = new Date().getMonth();
+}
+
+window.setCurrentMonth = function() {
+  const now = new Date();
+  document.getElementById('oy-yil').value = now.getFullYear();
+  document.getElementById('oy-oy').value = now.getMonth();
+  renderOylik();
+};
+
+function renderOylik() {
+  const yil = parseInt(document.getElementById('oy-yil').value, 10);
+  const oy = parseInt(document.getElementById('oy-oy').value, 10);
+
+  const mStr = `${yil}-${pad(oy + 1)}`;
+  const mRecs = records.filter(r => r.profileId === currentProfileId && r.date.startsWith(mStr)).sort((a,b) => a.date.localeCompare(b.date));
+
+  const oylikMaosh = parseFloat(document.getElementById('oylik-maosh').value) || 0;
+  const ishKunlari = parseInt(document.getElementById('oylik-kun').value, 10) || 26;
+  const normaSoatPerDay = 8;
+  const totalNormaHours = ishKunlari * normaSoatPerDay;
+
+  const hourlyRate = totalNormaHours > 0 ? (oylikMaosh / totalNormaHours) : 0;
+  const preview = document.getElementById('formula-preview');
+  if (preview) preview.textContent = `1 soatlik stavka: ~${formatCurrency(hourlyRate)} so'm (Norma: ${totalNormaHours} soat)`;
+
+  const cardRes = document.getElementById('oylik-result-card');
+  const tableWrap = document.getElementById('oylik-table-wrap');
+  const emptyDiv = document.getElementById('oylik-empty');
+
+  if (mRecs.length === 0) {
+    if (cardRes) cardRes.style.display = 'none';
+    if (tableWrap) tableWrap.style.display = 'none';
+    if (emptyDiv) emptyDiv.style.display = 'block';
+    return;
+  }
+
+  if (cardRes) cardRes.style.display = 'block';
+  if (tableWrap) tableWrap.style.display = 'block';
+  if (emptyDiv) emptyDiv.style.display = 'none';
+
+  let totalMins = 0;
+  mRecs.forEach(r => totalMins += r.durMins);
+
+  const totalHoursFloat = totalMins / 60;
+  const calculatedSalary = totalHoursFloat * hourlyRate;
+  const diffHoursFloat = totalHoursFloat - totalNormaHours;
+
+  document.getElementById('res-month-name').textContent = `${MONTH_NAMES[oy]} ${yil}`;
+  document.getElementById('res-maosh').textContent = `${formatCurrency(calculatedSalary)} so'm`;
+  document.getElementById('res-soat-label').textContent = `${totalHoursFloat.toFixed(1)} soat ishlangan`;
+
+  document.getElementById('res-kunlar').textContent = mRecs.length;
+  document.getElementById('res-jami').textContent = formatMinutes(totalMins);
+  document.getElementById('res-stavka').textContent = `${formatCurrency(hourlyRate)} so'm/s`;
+
+  const diffStr = diffHoursFloat >= 0 ? `+${diffHoursFloat.toFixed(1)} soat` : `${diffHoursFloat.toFixed(1)} soat`;
+  const diffEl = document.getElementById('res-farq');
+  diffEl.textContent = diffStr;
+  diffEl.style.color = diffHoursFloat >= 0 ? '#4ade80' : '#f87171';
+
+  const tbody = document.getElementById('oylik-tbody');
+  tbody.innerHTML = mRecs.map((r, idx) => {
+    const dObj = new Date(r.date);
+    const dayName = WEEK_DAYS[dObj.getDay()];
+    const daySalary = (r.durMins / 60) * hourlyRate;
+
+    return `<tr class="data-row">
+      <td>${idx + 1}</td>
+      <td>${r.date}</td>
+      <td>${dayName}</td>
+      <td>${r.timeIn}</td>
+      <td>${r.timeOut}</td>
+      <td style="font-weight:600; color:#f97316;">${formatMinutes(r.durMins)}</td>
+      <td style="color:#4ade80; font-weight:600;">${formatCurrency(daySalary)} so'm</td>
+      <td>${getBadgeHTML(r.status)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// Backup & Export
+window.exportBackup = function() {
+  const dataObj = {
+    profiles: profiles,
+    currentProfileId: currentProfileId,
+    records: records,
+    cfg: cfg,
+    maoshCfg: maoshCfg,
+    exportDate: new Date().toISOString()
+  };
+  const jsonStr = JSON.stringify(dataObj, null, 2);
+  const blob = new Blob([jsonStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Ish_Vaqti_Zaxira_${new Date().toISOString().substring(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+window.importBackup = function(evt) {
+  const file = evt.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const parsed = JSON.parse(e.target.result);
+      if (parsed.profiles) profiles = parsed.profiles;
+      if (parsed.currentProfileId) currentProfileId = parsed.currentProfileId;
+      if (parsed.records) records = parsed.records;
+      if (parsed.cfg) cfg = parsed.cfg;
+      if (parsed.maoshCfg) maoshCfg = parsed.maoshCfg;
+
+      syncToCloud();
+    } catch(err) {
+      console.error("Backup import failed", err);
+    }
+  };
+  reader.readAsText(file);
+};
+
+window.exportMultiSheetExcel = function() {
+  const curRecs = records.filter(r => r.profileId === currentProfileId);
+  if (curRecs.length === 0) return;
+
+  const wb = XLSX.utils.book_new();
+  const allData = curRecs.map((r, i) => ({
+    "№": i + 1,
+    "Sana": r.date,
+    "Kirish": r.timeIn,
+    "Chiqish": r.timeOut,
+    "Ish soati": formatMinutes(r.durMins),
+    "Holat": r.status
+  }));
+  const wsAll = XLSX.utils.json_to_sheet(allData);
+  XLSX.utils.book_append_sheet(wb, wsAll, "Ish Vaqti Hisoboti");
+
+  XLSX.writeFile(wb, `Ish_Vaqti_Hisoboti_${new Date().toISOString().substring(0,10)}.xlsx`);
+};
+
+// Navigation
+window.switchTab = function(id) {
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>{
+    const ids=['jadval','analitika','oylik','sozlama'];
+    b.classList.toggle('active', ids[i]===id);
+  });
+  document.querySelectorAll('.tab-page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  if(id==='oylik') renderOylik();
+  if(id==='analitika') renderCharts();
+};
+
+function setToday() {
+  const t = new Date();
+  const dateInput = document.getElementById('inp-date');
+  if (dateInput) dateInput.value = t.getFullYear() + '-' + pad(t.getMonth()+1) + '-' + pad(t.getDate());
+}
+
+// App Launch Initialization
+window.addEventListener('DOMContentLoaded', () => {
+  initYilSelect();
+  setToday();
+  loadFromLocalStorage();
+  updateOnlineStatus();
+  initFirebaseSync();
+});
+</script>
+</body>
+</html>
